@@ -28,11 +28,15 @@ with open(directory + '/stations.pkl', 'rb') as f :
 ## Querying flow and heights for all stations
 import pandas as pd
 flows_by_ids = dict()
+heights_by_ids = dict()
 
 for s in stations :
-    t_fs = scraping.get_flows(s['id'])
-    flows_by_ids[s['id']] =  pd.Series(t_fs['flow'],index=t_fs['time'])
-    print '{0} flows fetched for station {1}'.format(len(t_fs['time']),s['id'])
+    #t_fs = scraping.get_flows(s['id'])
+    #flows_by_ids[s['id']] =  pd.Series(t_fs['flow'],index=t_fs['time']) 
+    #print '{0} flows fetched for station {1}'.format(len(t_fs['time']),s['id'])
+    t_hs = scraping.get_heights(s['id'])
+    heights_by_ids[s['id']] =  pd.Series(t_hs['height'],index=t_hs['time'])
+    print '{0} heights fetched for station {1}'.format(len(t_hs['time']),s['id'])
 
 # HDF5 storage of flows time series
 store = pd.HDFStore('store.h5')
@@ -47,7 +51,6 @@ for stream,stream_stations in itertools.groupby(sorted(stations,key=operator.ite
     plt.plot(*map(list,zip(*[(s['X'],s['Y']) for s in stream_stations])),color='grey')
 
 plt.scatter(x=[s['X'] for s in stations],y=[s['Y'] for s in stations],s=np.log(df.ix[df.index[-100]]),edgecolor=None,color='grey',alpha=.75)
-
 
 # Plot of flows and heights for a given station
 fig = plt.figure()
