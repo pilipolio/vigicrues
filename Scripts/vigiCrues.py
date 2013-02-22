@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 # http://www.vigicrues.gouv.fr/niv_spc.php?idspc=21
-# www.hydro.eaufrance.fr/stations/Y2035010&procedure=fiche-station
+# http://www.hydro.eaufrance.fr/stations/Y2035010&procedure=fiche-station
 # http://www.rdbrmc.com/hydroreel2/station.php?codestation=844
 # http://www.languedoc-roussillon.developpement-durable.gouv.fr/telechargez-des-donnees-r514.html
 # http://www.geolittoral.equipement.gouv.fr/comment-acceder-aux-donnees-via-r39.html
@@ -14,7 +14,7 @@ import vigicrues.scraping as scraping
 
 ## Gathering static station informations by querying website with stations id from 0 to 1000
 stations = []
-for s in scraping.get_stations(range(0,10000)):
+for s in scraping.get_stations(range(10000,100000)):
     stations.append(s)
     print s
 
@@ -25,52 +25,41 @@ with open(directory + '/stations.pkl', 'wb') as f :
 with open(directory + '/stations.pkl', 'rb') as f :
     stations = pickle.load(f)
 
-## Querying flow and height
-s = stations[0]
-id = s['id']
-id = 1516
-t_fs = scraping.get_flows(id)
-t_hs = scraping.get_heights(id)
+## Querying flow and heights for all stations
+import pandas as pd
+flows_by_ids = dict()
 
+for s in stations :
+    t_fs = scraping.get_flows(s['id'])
+    flows_by_ids[s['id']] =  pd.Series(t_fs['flow'],index=t_fs['time'])
+    print '{0} flows fetched for station {1}'.format(len(t_fs['time']),s['id'])
+
+# HDF5 storage of flows time series
+store = pd.HDFStore('store.h5')
+store['flows'] = pd.DataFrame(flows_by_ids)
+
+df.ix[df.index[-1]]
+
+# plot all stations with size depending on flows
+import operator
+import itertools
+for stream,stream_stations in itertools.groupby(sorted(stations,key=operator.itemgetter('stream')),operator.itemgetter('stream')):
+    plt.plot(*map(list,zip(*[(s['X'],s['Y']) for s in stream_stations])),color='grey')
+
+plt.scatter(x=[s['X'] for s in stations],y=[s['Y'] for s in stations],s=np.log(df.ix[df.index[-100]]),edgecolor=None,color='grey',alpha=.75)
+
+
+# Plot of flows and heights for a given station
 fig = plt.figure()
-ax = fig.add_subplot(111)
-p_h = ax.plot(t_hs['time'], t_hs['height'],color='blue',lw=2,alpha=.7,label='Heights')
-ax_f = ax.twinx()
+ax_h = fig.add_subplot(111)
+p_h = ax_h.plot(t_hs['time'], t_hs['height'],color='blue',lw=2,alpha=.7,label='Heights')
+ax_h.legend(loc=2)
+ax_f = ax_h.twinx()
 p_f = ax_f.plot(t_fs['time'], t_fs['flow'],color='red',lw=2,alpha=.7,label='Flows')
+ax_f.legend(loc=1)
+for tick in ax_h.xaxis.get_major_ticks() : tick.label1.set_fontsize(6); tick.label1.set_rotation(30)
 
-p = plt.plot(tAndFs[:,0],tAndFs[:,1], label='Flow')
-plt.twinx()
-plt.plot(tAndHs[:,0],tAndHs[:,1], label='Height',c='r')
-plt.title('{} ({})'.format(s['name'],s['stream']))
-plt.legend()
-
-## insert data into mongo
-import pymongo
-c = pymongo.Connection()
-db = c.crues
-
-for s in stations:
-	 s['_id'] = s['id']
-	 
-db.stations.insert(stations)
-
-stations = list(db.stations.find())
-
-# fetch all heights
-requestedDate = datetime.date(2012, 3, 11)
-#db.heights.drop()
-for s in stations:
-	 #tAndFs = vigicrues.getFlows(s['id'])
-	 ts,hs = vigicrues.getHeights(s['id'])
-	 requestedIndexes = np.where(([t.date()==requestedDate for t in ts]))[0]
-	 if (len(requestedIndexes)>0) : db.heights.insert({ 'id':s['id'], 't':ts[requestedIndexes[0]], 'h':hs[requestedIndexes[0]]})
-	 print u'{} ({})'.format(s['name'],s['id'])
-	 time.sleep(1)
-
-
-hs = [h['h'] for h in db.heights.find({},{'h':1,'_id':0})]
-plt.hist(hs,bins=np.arange(0,100,5))
-
+# heights histogram
 plt.hist(hs,bins=10**np.linspace(-2, 2, 40))
 plt.xscale('log')
 plt.close()
@@ -82,14 +71,3 @@ hsByInt = [[h for h in hs if (h >= b1 and h<b2)] for b1,b2 in scaleIntervals]
 plt.hist(hsByInt,bins=10**np.linspace(-2, 2, 40)),labels=scaleIntervals)
 plt.xscale('log')
 plt.close()
-
-# write csv X,Y,heights
-def decorateHeight(h):
-	 h.update(db.stations.find_one({'id':h['id']}))
-	 h['hi'] = [i for i,bs in enumerate(scaleIntervals) if (h['h']>=bs[0] and h['h']<bs[1])][0]
-	 return h
-	 
-decoratedHeights = map(decorateHeight, list(db.heights.find()))
-
-with open(directory + '/heights.csv', 'wb') as f :
-	 f.writelines((u'{};{};{};{}\r\n'.format(h['X'],h['Y'],h['h'],h['hi']) for h in decoratedHeights))
