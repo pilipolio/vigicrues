@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+ï»¿# -*- coding: utf-8 -*-
 # http://www.vigicrues.gouv.fr/niv_spc.php?idspc=21
 # www.hydro.eaufrance.fr/stations/Y2035010&procedure=fiche-station
 # http://www.rdbrmc.com/hydroreel2/station.php?codestation=844
@@ -7,47 +7,40 @@
 # http://eductice.ens-lyon.fr/EducTice/projets/en-cours/geomatique/veille/sig/Jeux-de-donnees
 
 from datetime import datetime
-import sys
-import itertools
-
-import time
 import pickle
 import numpy as np
 from matplotlib import pyplot as plt
-
-import vigicrues.vigiCruesScraper as scraper
-
-## http://www.vigicrues.gouv.fr/niveau3.php?idstation=1750&idspc=21&typegraphe=h&AffProfondeur=72&AffRef=auto&AffPrevi=non&nbrstations=1&ong=2
-## idspc (service prévision des crues http://www.vigicrues.gouv.fr/niv_spc.php?idspc=19) pas nécessaire?
-## typegraphe= h (hauteur), d (débit)
-## AffProfondeur = nombre heures dans le passé (15 jours max?)
-## AffRef = afficher crues de références
-## AffPrevi
-## nbrstations
-## ong = 1 graphique, 2 = tableau, 3 = infos station
-
-## www.vigicrues.gouv.fr/niv3/photos/photo_1000.jpg
+import vigicrues.scraping as scraping
 
 ## Gathering static station informations by querying website with stations id from 0 to 1000
-stations = list(scraper.probeStations(range(0,1000)))
+stations = []
+for s in scraping.get_stations(range(0,10000)):
+    stations.append(s)
+    print s
 
-directory = r'D:\PythonWorkspace\VisualizeVigiCrues'
+directory = r'D:\PythonWorkspace\site_packages\vigicrues\Data'
 with open(directory + '/stations.pkl', 'wb') as f :
-	 pickle.dump(stations, f)
+    pickle.dump(stations, f)
 
 with open(directory + '/stations.pkl', 'rb') as f :
-	 stations = pickle.load(f)
+    stations = pickle.load(f)
 
 ## Querying flow and height
 s = stations[0]
 id = s['id']
-id = 1750
-tAndFs = scraper.getFlows(id)
-tAndHs = scraper.getHeights(id)
+id = 1516
+t_fs = scraping.get_flows(id)
+t_hs = scraping.get_heights(id)
 
-p = plt.plot(tAndFs[:,0],tAndFs[:,1], label='Débit')
+fig = plt.figure()
+ax = fig.add_subplot(111)
+p_h = ax.plot(t_hs['time'], t_hs['height'],color='blue',lw=2,alpha=.7,label='Heights')
+ax_f = ax.twinx()
+p_f = ax_f.plot(t_fs['time'], t_fs['flow'],color='red',lw=2,alpha=.7,label='Flows')
+
+p = plt.plot(tAndFs[:,0],tAndFs[:,1], label='Flow')
 plt.twinx()
-plt.plot(tAndHs[:,0],tAndHs[:,1], label='Hauteur',c='r')
+plt.plot(tAndHs[:,0],tAndHs[:,1], label='Height',c='r')
 plt.title('{} ({})'.format(s['name'],s['stream']))
 plt.legend()
 
