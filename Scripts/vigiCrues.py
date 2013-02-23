@@ -12,37 +12,53 @@ import numpy as np
 from matplotlib import pyplot as plt
 import vigicrues.scraping as scraping
 
-## Gathering static station informations by querying website with stations id from 0 to 1000
-stations = []
-for s in scraping.get_stations(range(10000,100000)):
-    stations.append(s)
-    print s
+import pandas as pd
+data2 = {'a': [1,2,3], 'b': [1,2,4]}
+pd.DataFrame.from_dict(data2,orient='columns')
+data2 = {'a': {1:0,2:1,3:3}, 'b': {1:0,2:1,4:3}}
+pd.DataFrame.from_dict(data2,orient='columns')
+
+data2 = {'a': {datetime(2013,1,1):0,datetime(2013,1,2):1,datetime(2013,1,3):3}, 'b': {datetime(2013,1,1):0,datetime(2013,1,2):1,datetime(2013,1,4):3}}
+pd.DataFrame.from_dict(data2,orient='columns')
+
+# not working
+data2 = {'a': [(1,0),(2,1),(3,3)], 'b': [(1,0),(2,1),(4,3)]}
+pd.DataFrame.from_items(data2,orient='columns')
 
 directory = r'D:\PythonWorkspace\site_packages\vigicrues\Data'
-with open(directory + '/stations.pkl', 'wb') as f :
-    pickle.dump(stations, f)
-
-with open(directory + '/stations.pkl', 'rb') as f :
-    stations = pickle.load(f)
-
+scraper = scraping.scraper(directory)
+stations = scraper.load_stations()
 ## Querying flow and heights for all stations
 import pandas as pd
 flows_by_ids = dict()
 heights_by_ids = dict()
 
-for s in stations :
-    #t_fs = scraping.get_flows(s['id'])
-    #flows_by_ids[s['id']] =  pd.Series(t_fs['flow'],index=t_fs['time']) 
-    #print '{0} flows fetched for station {1}'.format(len(t_fs['time']),s['id'])
-    t_hs = scraping.get_heights(s['id'])
-    heights_by_ids[s['id']] =  pd.Series(t_hs['height'],index=t_hs['time'])
-    print '{0} heights fetched for station {1}'.format(len(t_hs['time']),s['id'])
+for s in stations[0:10] :
+    flows_by_ids[s['id']] = scraping.get_flows(s['id'])
+    heights_by_ids[s['id']] = scraping.get_heights(s['id'])
+    print '{} heights and {} flows fetched for station {}'.format(len(heights_by_ids[s['id']]), len(flows_by_ids[s['id']]), s['id'])
+
+heights = pd.DataFrame.from_dict(dict((id,dict(hs)) for id, hs in heights_by_ids.iteritems()),orient='columns')
+flows = pd.DataFrame.from_dict(dict((id,dict(hs)) for id, hs in flows_by_ids.iteritems()),orient='columns')
 
 # HDF5 storage of flows time series
-store = pd.HDFStore('store.h5')
-store['flows'] = pd.DataFrame(flows_by_ids)
+store = pd.HDFStore(r'D:\PythonWorkspace\site_packages\vigicrues\Data\store.h5')
+store['flows'] = flows
+store['heights'] = heights
 
-df.ix[df.index[-1]]
+flows = store['flows']
+heights = store['heights']
+
+# Plot of flows and heights for a given station
+station_id = 1516
+fig = plt.figure()
+ax_h = fig.add_subplot(111)
+p_h = ax_h.plot(heights[station_id][heights[station_id]>0],color='blue',lw=2,alpha=.7,label='Heights')
+ax_h.legend(loc=2)
+ax_f = ax_h.twinx()
+p_f = ax_f.plot(flows[station_id][flows[station_id]>0],color='red',lw=2,alpha=.7,label='Flows')
+ax_f.legend(loc=1)
+for tick in ax_h.xaxis.get_major_ticks() : tick.label1.set_fontsize(6); tick.label1.set_rotation(30)
 
 # plot all stations with size depending on flows
 import operator
@@ -52,15 +68,6 @@ for stream,stream_stations in itertools.groupby(sorted(stations,key=operator.ite
 
 plt.scatter(x=[s['X'] for s in stations],y=[s['Y'] for s in stations],s=np.log(df.ix[df.index[-100]]),edgecolor=None,color='grey',alpha=.75)
 
-# Plot of flows and heights for a given station
-fig = plt.figure()
-ax_h = fig.add_subplot(111)
-p_h = ax_h.plot(t_hs['time'], t_hs['height'],color='blue',lw=2,alpha=.7,label='Heights')
-ax_h.legend(loc=2)
-ax_f = ax_h.twinx()
-p_f = ax_f.plot(t_fs['time'], t_fs['flow'],color='red',lw=2,alpha=.7,label='Flows')
-ax_f.legend(loc=1)
-for tick in ax_h.xaxis.get_major_ticks() : tick.label1.set_fontsize(6); tick.label1.set_rotation(30)
 
 # heights histogram
 plt.hist(hs,bins=10**np.linspace(-2, 2, 40))

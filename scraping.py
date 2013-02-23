@@ -1,11 +1,12 @@
 ﻿# -*- coding: utf-8 -*-
 from datetime import datetime
-import time
 import re
-import urllib, urllib2, json
+import urllib
+import urllib2
 import HTMLParser
-import numpy as np
-
+import pickle
+import os.path as path
+ 
 """ http://www.vigicrues.gouv.fr/niveau3.php?idstation=1750&idspc=21&typegraphe=h&AffProfondeur=72&AffRef=auto&AffPrevi=non&nbrstations=1&ong=2
  * idspc (service prévision des crues http://www.vigicrues.gouv.fr/niv_spc.php?idspc=19) pas nécessaire?
  * typegraphe= h (hauteur), d (débit)
@@ -16,6 +17,24 @@ import numpy as np
  * ong = 1 graphique, 2 = tableau, 3 = infos station
 Check http://blog.dispatched.ch/2009/03/15/webscraping-with-python-and-beautifulsoup/?
 """
+
+class scraper:
+    def __init__(self,directory):
+        self.directory = directory
+    def load_stations(self):
+        stations_path = path.join(self.directory,'stations.pkl')
+        if path.exists(stations_path) :
+            with open(stations_path, 'rb') as f :
+                stations = pickle.load(f)
+        else :
+            ## Gathering static station informations by querying website with stations id from 0 to 1000
+            stations = []
+            for s in scraping.get_stations(range(0,10000)):
+                stations.append(s)
+                print s
+            with open(stations_path, 'wb') as f :
+                pickle.dump(stations, f)
+        return stations
 
 def parse_station(page_text):
     """ Parse station features from html returned by url http://www.vigicrues.gouv.fr/niveau3.php?idstation=1516&idspc=21&typegraphe=h&AffProfondeur=72&AffRef=auto&AffPrevi=non&nbrstations=1&ong=3
@@ -77,20 +96,20 @@ def parse_flows(page_text):
     Parse and returns time and flows array from page text
     >>> page_text = '''<area shape="poly" coords="405, 147, 409, 147, 409, 151, 405, 151, 405, 147" href="#0" title="27/02/2012 11:00 Valeur mesurée = 0.56" alt="27/02/2012 11:00 Valeur mesurée = 0.56" />'''
     >>> parse_flows(page_text)
-    {'flow': [0.56], 'time': [datetime.datetime(2012, 2, 27, 11, 0)]}
+    [(datetime.datetime(2012, 2, 27, 11, 0), 0.56)]
     """
-    time_flow_tuples = ((datetime.strptime(m.groups()[0], '%d/%m/%Y %H:%M'), float(m.groups()[1])) for m in re.finditer("title=.?(.{16}) Valeur .* = (\d+\.?\d*)", page_text))
+    # Prefer to output list of tuples (dt,height), as it requires less processing AND is easily inserted into a pd.DataFrame through from_dict
+    time_flow_tuples = [(datetime.strptime(m.groups()[0], '%d/%m/%Y %H:%M'), float(m.groups()[1])) for m in re.finditer("title=.?(.{16}) Valeur .* = (\d+\.?\d*)", page_text)]
+    return time_flow_tuples
     # http://stackoverflow.com/questions/8081545/convert-list-of-tuples-to-multiple-lists-in-python
-    time_and_flows = map(list, zip(*time_flow_tuples))
-    return { "time":time_and_flows[0], "flow":time_and_flows[1]}
+    #time_and_flows = map(list, zip(*time_flow_tuples))
+    #return { "time":time_and_flows[0], "flow":time_and_flows[1]} if len(time_and_flows) != 0 else { "time":[],"flow":[]}
 
 def get_flows(station_id):
     """
     Returns flows for a given station_id.
     Example with http://www.vigicrues.gouv.fr/niveau3.php?idstation=1516&typegraphe=q&AffProfondeur=500&ong=1
     >>> flows = get_flows(1516)
-    >>> len(flows['time']) == len(flows['flow'])
-    True
     """
     debitUrl = 'http://www.vigicrues.gouv.fr/niveau3.php?idstation={}&typegraphe=q&AffProfondeur=500&ong=1'
     flowGraphText = urllib2.urlopen(debitUrl.format(station_id)).read()
@@ -102,29 +121,29 @@ def parse_heights(page_text):
     >>> page_text = '''<area shape="poly" coords="269, 123, 273, 123, 273, 127, 269, 127, 269, 123" href="#148" title="11/02/2013 06:00 Valeur mesurée = 1.95" alt="11/02/2013 06:00 Valeur mesurée = 1.95" />
     ... <area shape="poly" coords="270, 122, 274, 122, 274, 126, 270, 126, 270, 122" href="#149" title="11/02/2013 07:00 Valeur mesurée = 1.96" alt="11/02/2013 07:00 Valeur mesurée = 1.96" />'''
     >>> parse_heights(page_text)
-    {'height': [1.95, 1.96], 'time': [datetime.datetime(2013, 2, 11, 6, 0), datetime.datetime(2013, 2, 11, 7, 0)]}
+    [(datetime.datetime(2013, 2, 11, 6, 0), 1.95), (datetime.datetime(2013, 2, 11, 7, 0), 1.96)]
     """
-    time_height_tuples = ((datetime.strptime(m.groups()[0], '%d/%m/%Y %H:%M'), float(m.groups()[1])) for m in re.finditer("title=.?(.{16}) Valeur .* = (\d+\.?\d*)", page_text))
+    # Prefer to output list of tuples (dt,height), as it requires less processing AND is easily inserted into a pd.DataFrame through from_dict
+    time_height_tuples = [(datetime.strptime(m.groups()[0], '%d/%m/%Y %H:%M'), float(m.groups()[1])) for m in re.finditer("title=.?(.{16}) Valeur .* = (\d+\.?\d*)", page_text)]
+    return time_height_tuples
     # http://stackoverflow.com/questions/8081545/convert-list-of-tuples-to-multiple-lists-in-python
-    time_and_heights = map(list, zip(*time_height_tuples))
-    return { "time":time_and_heights[0], "height":time_and_heights[1]}
+    #time_and_heights = map(list, zip(*time_height_tuples))
+    #return { "time":time_and_heights[0], "height":time_and_heights[1]}  if len(time_and_heights) != 0 else { "time":[],"height":[]}
 
 def get_heights(station_id):
     """
     Returns heights for a given station_id.
     Example with http://www.vigicrues.gouv.fr/niveau3.php?idstation=1516&typegraphe=q&AffProfondeur=500&ong=1
     >>> heights = get_heights(1516)
-    >>> len(heights['time']) == len(heights['height'])
-    True
     """
     hauteurUrl = 'http://www.vigicrues.gouv.fr/niveau3.php?idstation={}&typegraphe=h&AffProfondeur=500&ong=1'
     page_text = urllib2.urlopen(hauteurUrl.format(station_id)).read()
     return parse_heights(page_text)
      
-def get_stations(station_ids, info_stations_url = 'http://www.vigicrues.gouv.fr/niveau3.php?idstation={}&ong=3',sleep_interval=0.1):
+def get_stations(station_ids, info_stations_url = 'http://www.vigicrues.gouv.fr/niveau3.php?idstation={}&ong=3'):
     """
     Get stations. safe catch to enable probing.
-    >>> list(probeStations([1516]))[0]['name']
+    >>> list(get_stations([1516]))[0]['name']
     u'Gourfaleur'
     """
     for id in station_ids :
@@ -132,7 +151,6 @@ def get_stations(station_ids, info_stations_url = 'http://www.vigicrues.gouv.fr/
         s = parse_station(page_text)
         if len(s) : 
             yield s
-        time.sleep(sleep_interval)
          
 if __name__ == "__main__":
     import doctest
