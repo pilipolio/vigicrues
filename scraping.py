@@ -35,6 +35,18 @@ class scraper:
             with open(stations_path, 'wb') as f :
                 pickle.dump(stations, f)
         return stations
+    def load_data(self):
+        """
+        Querying flow and heights for all stations.
+        """
+        flows_by_ids = dict()
+        heights_by_ids = dict()
+
+        for s in stations :
+            flows_by_ids[s['id']] = scraping.get_flows(s['id'])
+            heights_by_ids[s['id']] = scraping.get_heights(s['id'])
+            print '{} heights and {} flows fetched for station {}'.format(len(heights_by_ids[s['id']]), len(flows_by_ids[s['id']]), s['id'])
+        return flows_by_ids, heights_by_ids
 
 def parse_station(page_text):
     """ Parse station features from html returned by url http://www.vigicrues.gouv.fr/niveau3.php?idstation=1516&idspc=21&typegraphe=h&AffProfondeur=72&AffRef=auto&AffPrevi=non&nbrstations=1&ong=3
