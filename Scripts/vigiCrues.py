@@ -11,7 +11,7 @@ TODO :
  * Start a notebook
  * analyze and fill missing values
  * calibration of heights/flows
- * animatation of plots
+ * animation of plots
  * match station to stream and geometry
  * build stream deformation according to flows/heights
  * flow/height relationship
@@ -20,21 +20,22 @@ from datetime import datetime
 from datetime import time
 import pickle
 import numpy as np
-from matplotlib import pyplot as plt
-import vigicrues.scraping as scraping
 import pandas as pd
+from matplotlib import pyplot as plt
+import matplotlib as mpl
+import vigicrues.scraping as scraping
 
 directory = r'D:\PythonWorkspace\site_packages\vigicrues\Data'
 scraper = scraping.scraper(directory)
 stations = scraper.load_stations()
 
-heights = pd.DataFrame.from_dict(dict((id,dict(hs)) for id, hs in heights_by_ids.iteritems()),orient='columns')
-flows = pd.DataFrame.from_dict(dict((id,dict(hs)) for id, hs in flows_by_ids.iteritems()),orient='columns')
+#heights = pd.DataFrame.from_dict(dict((id,dict(hs)) for id, hs in heights_by_ids.iteritems()),orient='columns')
+#flows = pd.DataFrame.from_dict(dict((id,dict(hs)) for id, hs in flows_by_ids.iteritems()),orient='columns')
 
 # HDF5 storage of flows time series
 store = pd.HDFStore(r'D:\PythonWorkspace\site_packages\vigicrues\Data\store.h5')
-store['flows'] = flows
-store['heights'] = heights
+#store['flows'] = flows
+#store['heights'] = heights
 
 flows = store['flows']
 heights = store['heights']
@@ -81,14 +82,13 @@ import itertools
 for stream,stream_stations in itertools.groupby(sorted(stations,key=operator.itemgetter('stream')),operator.itemgetter('stream')):
     plt.plot(*map(list,zip(*[(s['X'],s['Y']) for s in stream_stations])),color='grey',alpha=.25)
 
-cmap = mpl.ColorMap()
-
-xys = [(s['X'],s['Y']) for s in stations]
 dt = pd.datetime(2013,02,12)
-plt.scatter(*zip(*xys),s=flows.ix[dt],lw=0,c=np.log(heights.ix[dt]),alpha=.75)
+station_xys = [(s['X'],s['Y']) for s in stations]
+
+plt.scatter(*zip(*station_xys),s=flows.ix[dt],lw=0,c=np.log(heights.ix[dt]),alpha=.75)
 plt.xticks([])
 plt.yticks([])
-plt.colorbar()
+#plt.colorbar()
 ax = plt.gca()
 plt.setp(ax, frame_on=False)
 plt.savefig('{:%Y%m%d}_France_maps.png'.format(dt))
@@ -100,16 +100,6 @@ union_index = flows.index.union(heights.index)
 f_s = flows.ix[union_index].values
 h_s = heights.ix[union_index].values
 not_nan_idx = np.where(np.logical_not(logical_or(np.isnan(f_s),np.isnan(h_s))))
-
 plt.scatter(f_s[not_nan_idx],h_s[not_nan_idx],alpha=.05,s=.3,c=not_nan_idx[1])
 plt.ylim([0,15])
 plt.xlim([0,2000])
-
-# heights histogram
-plt.hist(h_s[np.logical_not(np.isnan(h_s))].flat,bins=10**np.linspace(-2, 3, 60))
-plt.xscale('log')
-plt.close()
-
-plt.hist(f_s[np.logical_not(np.isnan(f_s))].flat,bins=10**np.linspace(-2, 5, 140))
-plt.xscale('log')
-plt.close()
