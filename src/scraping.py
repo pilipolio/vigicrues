@@ -7,6 +7,44 @@ import HTMLParser
 import pickle
 import os.path as path
  
+
+class Scraper:
+    """
+    High level class fetching stations and associated flows and heights.
+    Either from pickled data on a local directory or from scratch by probing http://www.vigicrues.gouv.fr/ 
+    """
+
+    def __init__(self, directory):
+        self.directory = directory
+
+    def load_stations(self):
+        stations_path = path.join(self.directory, 'stations.pkl')
+        if path.exists(stations_path) :
+            with open(stations_path, 'rb') as f :
+                stations = pickle.load(f)
+        else :
+            ## Gathering static station informations by querying website with stations id from 0 to 1000
+            stations = []
+            for s in get_stations(range(0,10000)):
+                stations.append(s)
+                print s
+            with open(stations_path, 'wb') as f :
+                pickle.dump(stations, f)
+        return stations
+
+    def load_data(self, stations):
+        """
+        Querying flow and heights for all stations.
+        """
+        flows_by_ids = dict()
+        heights_by_ids = dict()
+
+        for s in stations :
+            flows_by_ids[s['id']] = get_flows(s['id'])
+            heights_by_ids[s['id']] = get_heights(s['id'])
+            print '{} heights and {} flows fetched for station {}'.format(len(heights_by_ids[s['id']]), len(flows_by_ids[s['id']]), s['id'])
+        return flows_by_ids, heights_by_ids
+
 """ http://www.vigicrues.gouv.fr/niveau3.php?idstation=1750&idspc=21&typegraphe=h&AffProfondeur=72&AffRef=auto&AffPrevi=non&nbrstations=1&ong=2
  * idspc (service prévision des crues http://www.vigicrues.gouv.fr/niv_spc.php?idspc=19) pas nécessaire?
  * typegraphe= h (hauteur), d (débit)
@@ -17,36 +55,6 @@ import os.path as path
  * ong = 1 graphique, 2 = tableau, 3 = infos station
 Check http://blog.dispatched.ch/2009/03/15/webscraping-with-python-and-beautifulsoup/?
 """
-
-class scraper:
-    def __init__(self,directory):
-        self.directory = directory
-    def load_stations(self):
-        stations_path = path.join(self.directory,'stations.pkl')
-        if path.exists(stations_path) :
-            with open(stations_path, 'rb') as f :
-                stations = pickle.load(f)
-        else :
-            ## Gathering static station informations by querying website with stations id from 0 to 1000
-            stations = []
-            for s in scraping.get_stations(range(0,10000)):
-                stations.append(s)
-                print s
-            with open(stations_path, 'wb') as f :
-                pickle.dump(stations, f)
-        return stations
-    def load_data(self):
-        """
-        Querying flow and heights for all stations.
-        """
-        flows_by_ids = dict()
-        heights_by_ids = dict()
-
-        for s in stations :
-            flows_by_ids[s['id']] = scraping.get_flows(s['id'])
-            heights_by_ids[s['id']] = scraping.get_heights(s['id'])
-            print '{} heights and {} flows fetched for station {}'.format(len(heights_by_ids[s['id']]), len(flows_by_ids[s['id']]), s['id'])
-        return flows_by_ids, heights_by_ids
 
 def parse_station(page_text):
     """ Parse station features from html returned by url http://www.vigicrues.gouv.fr/niveau3.php?idstation=1516&idspc=21&typegraphe=h&AffProfondeur=72&AffRef=auto&AffPrevi=non&nbrstations=1&ong=3
