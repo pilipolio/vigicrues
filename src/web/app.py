@@ -1,5 +1,4 @@
-from flask import Flask
-from flask import jsonify
+from flask import Flask, jsonify, render_template, request
 
 import scraping
 
@@ -7,7 +6,11 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return 'Scrapped Vigicrues data rest API'
+    return render_template('index.html')
+
+@app.route('/stationFlowGraph/<int:station_id>')
+def get_station_flow_graph(station_id):
+    return render_template('station_flow_graph.html')
 
 @app.route('/stations')
 def get_stations():
