@@ -16,8 +16,20 @@
 <script>window.jQuery || document.write('<script src="{{
   url_for('static', filename='jquery.js') }}">\x3C/script>')</script>
 
+
+<style>
+#legend {
+        float: left;
+        margin-left: 15px;
+}
+</style>
+
 <body>
-<div id="chart"></div>
+
+<div id="chart_container">
+	<div id="chart"></div>
+	<div id="legend"></div>
+</div>
 
 <script>
 
@@ -27,13 +39,21 @@ var ajaxGraph = new Rickshaw.Graph.Ajax( {
 	width: 400,
 	height: 200,
 	renderer: 'line',
-	dataURL: "{{url_for('static', filename='data.json')}}",
+	dataURL: "{{ url_for('get_station_flows', station_id=station_id) }}",
 	series: [
 		{
-			name: 'Test',
+			name: {{station_id}},
 			color: '#c05020',
 		}
-	]
+	],
+	onComplete: function(transport) {
+                var graph = transport.graph;
+                var detail = new Rickshaw.Graph.HoverDetail({ graph: graph });
+		var legend = new Rickshaw.Graph.Legend( {
+			element: document.querySelector('#legend'),
+			graph: graph 
+		} );
+        }
 } );
 
 </script> 
